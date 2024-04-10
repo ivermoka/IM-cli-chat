@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,14 +14,60 @@ import (
 )
 
 type Message struct {
+	Username string `json:"username"`
 	Date    string `json:"date"`
 	Message string `json:"message"`
 }
 
-const address string = "localhost:8080"
+type User struct {
+	ID int
+	name string 
+	isAnonymous bool
+}
+
+// TODO: bruk env variabel
+
+const address string = "172.31.25.174:8080" // bruk når hostet på VM
+// const address string = "localhost:8080" // bruk når kjøres lokalt
+var user User
 
 func main() {
+	start()
+
 	initWebsocketClient()
+}
+
+func start() {
+	for {
+		var choice string
+		fmt.Println("Hi! Do you want to remain anonymous? (Y/N)")
+		fmt.Print("> ")
+		fmt.Scanln(&choice)
+
+		choice = strings.ToUpper(choice)
+
+		if choice == "Y" {
+			user.isAnonymous = true
+			break
+		} else if choice == "N" {
+			user.isAnonymous = false
+			break
+		} else {
+			fmt.Println("Invalid choice. Please enter Y or N.")
+		}
+	}
+
+	if user.isAnonymous {
+		fmt.Println("You've chosen to remain anonymous.")
+		randomNumber := rand.Intn(32768)
+		user.ID = randomNumber
+	} else {
+		fmt.Println("What is your name?")
+		fmt.Print("> ")
+		fmt.Scanln(&user.name)
+		fmt.Printf("Welcome, %s! Nice to meet you!\n", user.name)
+		time.Sleep(time.Second)
+	}
 }
 
 func initWebsocketClient() {
@@ -78,7 +126,7 @@ func readClientMessages(ws *websocket.Conn, gui *gocui.Gui, incomingMessages cha
 
         formattedDate := parsedTime.Format("2006-01-02 15:04:05")
 
-        message := fmt.Sprintf("%s : %s", formattedDate, jsonString.Message)
+        message := fmt.Sprintf("%s | %s : %s", formattedDate, jsonString.Username, jsonString.Message)
         // oppdater guien sånn at de nye meldingene kommer opp
         gui.Update(func(g *gocui.Gui) error {
             v, err := g.View("messages")
@@ -140,8 +188,16 @@ func sendMessageHandler(ws *websocket.Conn, gui *gocui.Gui) func(*gocui.Gui, *go
 		if message == "" {
 			return nil
 		}
+		var name string
+
+		if !user.isAnonymous {
+			name += user.name
+		} else {
+			name += "Anonymous" + strconv.Itoa(user.ID)
+		}
 
 		msg := Message{
+			Username: name,
 			Date:    time.Now().Format(time.RFC3339),
 			Message: message,
 		}
